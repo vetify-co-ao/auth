@@ -1,11 +1,14 @@
-FROM oven/bun:latest
+FROM oven/bun:1.2.21-alpine
+WORKDIR /auth
 
 COPY package.json ./
-COPY bun.lock ./
-COPY src ./
-
 RUN bun install
+COPY src .
+COPY .env .
 
-EXPOSE 3333
 
-CMD ["bun", "./src/index.ts"]
+EXPOSE 3000
+
+VOLUME [ "/conf" ]
+
+CMD ["bun", "/auth/index.ts"]

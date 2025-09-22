@@ -1,14 +1,14 @@
 import { OnSuccessResponder } from "@openauthjs/openauth/issuer";
-import {
-  CodeProvider,
-  CodeProviderError,
-} from "@openauthjs/openauth/provider/code";
+import { CodeProvider } from "@openauthjs/openauth/provider/code";
 import { CodeUI } from "@openauthjs/openauth/ui/code";
 import { Prettify } from "@openauthjs/openauth/util";
-import nodemailer from "nodemailer";
 import { emailTemplate } from "./emailTemplate";
+import { gmail_v1, google } from "googleapis";
 
 const VENDUS_URL = "https://www.vendus.co.ao/ws/clients/";
+const KEY_FILE_PATH = process.env.GOOGLE_CREDENTIALS_FILE;
+const SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
+const IMPERSONATED_EMAIL = process.env.FROM_EMAIL;
 
 type OnCustomerSuccess = OnSuccessResponder<
   Prettify<{
@@ -28,65 +28,66 @@ type CustomerInput = {
   claims: CustomerClaims;
 };
 
-/**
- * Sends an email to the specified recipient with the given message.
- * Utilizes environment variables for SMTP configuration.
- *
- * @param to - The recipient's email address
- * @param message - The content of the email
- * @returns Promise that resolves when the email is sent
- */
+async function authorize(): Promise<gmail_v1.Gmail> {
+  const serviceAccountKey = await import(KEY_FILE_PATH!, {
+    with: { type: "json" },
+  });
+
+  const jwtClient = new google.auth.JWT({
+    key: serviceAccountKey.client_email,
+    keyFile: serviceAccountKey.private_key,
+    scopes: SCOPES,
+    email: IMPERSONATED_EMAIL,
+  });
+
+  await jwtClient.authorize();
+
+  const gmail = google.gmail({ version: "v1", auth: jwtClient });
+  console.log("Gmail API service initialized successfully.");
+  return gmail;
+}
+
 async function sendEmail(to: string, code: string): Promise<void> {
   console.log(`Sending email to ${to} with code ${code}`);
 
-  // Check for required environment variables
-  const smtpUsername = process.env.SMTP_USERNAME;
-  const smtpPassword = process.env.SMTP_PASSWORD;
-  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
-  const smtpPort = parseInt(process.env.SMTP_PORT || "465", 10);
-  const fromEmail = process.env.FROM_EMAIL || "no-reply@vetify.co.ao";
+  const gmail = await authorize();
 
-  if (!smtpUsername || !smtpPassword) {
-    console.error(
-      "SMTP_USERNAME and SMTP_PASSWORD environment variables must be set",
-    );
-    throw new Error("Email configuration missing");
-  }
-
-  // Create a transporter object
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    host: smtpHost,
-    port: smtpPort,
-    secure: true,
-
-    auth: {
-      user: smtpUsername,
-      pass: smtpPassword,
-    },
-  });
-
+  const from = IMPERSONATED_EMAIL;
   const message = emailTemplate(to, code);
+  const subject = "O seu código de verificação do Portal Vetify";
 
-  // Email options
-  const mailOptions = {
-    from: `"Vetify" <${fromEmail}>`,
-    replyTo: `"Vetify" <${fromEmail}>`,
-    to: to,
-    subject: "O seu código de verificação do Portal Vetify",
-    html: `<p>${message}</p>`,
-  };
+  // The email needs to be base64url encoded
+  const emailLines = [
+    `Content-Type: text/html; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+    `Content-Transfer-Encoding: 7bit`,
+    `to: ${to}`,
+    `from: "Vetify" <${from}>`,
+    `replyTo: "Vetify" <${from}>`,
+    `subject: ${subject}`,
+    "",
+    message,
+  ];
 
-  console.log("Your code:", message);
+  const email = emailLines.join("\r\n");
+  const encodedMessage = Buffer.from(email)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
-  // // Send email
-  // try {
-  //   await transporter.sendMail(mailOptions);
-  //   console.log(`Email sent successfully to ${to}`);
-  // } catch (error) {
-  //   console.error("Error sending email:", error);
-  //   throw new Error(`Failed to send email: ${error.message}`);
-  // }
+  try {
+    const res = await gmail.users.messages.send({
+      userId: "me", // 'me' refers to the impersonated user (USER_EMAIL)
+      requestBody: {
+        raw: encodedMessage,
+      },
+    });
+    console.log("Email sent successfully! Message ID:", res.data.id);
+  } catch (error) {
+    console.error("The API returned an error: " + error);
+    throw error;
+  }
 }
 
 async function sendCode(claims: CustomerClaims, code: string): Promise<void> {

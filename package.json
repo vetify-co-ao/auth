@@ -1,11 +1,8 @@
 {
   "dependencies": {
     "@openauthjs/openauth": "^0.4.3",
+    "googleapis": "^160.0.0",
     "jose": "^6.0.12",
-    "nodemailer": "^6.10.1",
     "valibot": "^1.1.0"
-  },
-  "devDependencies": {
-    "@types/nodemailer": "^6.4.17"
   }
 }
