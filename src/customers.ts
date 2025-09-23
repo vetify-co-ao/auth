@@ -53,7 +53,7 @@ async function sendEmail(to: string, code: string): Promise<void> {
 
   const gmail = await authorize();
 
-  const from = IMPERSONATED_EMAIL;
+  const from = NO_REPLY_EMAIL;
   const message = emailTemplate(to, code);
   const subject = "O seu código de verificação do Portal Vetify";
 
