@@ -11,6 +11,8 @@ const SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
 const IMPERSONATED_EMAIL = process.env.IMPERSONATED_EMAIL;
 const NO_REPLY_EMAIL = process.env.NO_REPLY_EMAIL;
 
+const DEBUG_MODE = process.env.DEBUG_MODE === "true";
+
 type OnCustomerSuccess = OnSuccessResponder<
   Prettify<{
     type: "customer";
@@ -49,7 +51,7 @@ async function authorize(): Promise<gmail_v1.Gmail> {
 }
 
 async function sendEmail(to: string, code: string): Promise<void> {
-  console.log(`Sending email to ${to} with code ${code}`);
+  if (DEBUG_MODE) console.log(`Sending email to ${to} with code ${code}`);
 
   const gmail = await authorize();
 
@@ -71,6 +73,12 @@ async function sendEmail(to: string, code: string): Promise<void> {
   ];
 
   const email = emailLines.join("\r\n");
+
+  if (DEBUG_MODE) {
+    console.log("Email content:");
+    console.log(email);
+  }
+
   const encodedMessage = Buffer.from(email)
     .toString("base64")
     .replace(/\+/g, "-")
