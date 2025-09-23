@@ -57,8 +57,7 @@ async function sendEmail(to: string, code: string): Promise<void> {
 
   const from = NO_REPLY_EMAIL;
   const message = emailTemplate(to, code);
-  const subject =
-    "O seu  c&oacute;digo de verifica&ccilde;&atilde;o do Portal Vetify";
+  const subject = "O seu codigo de verificacao no Portal Vetify";
 
   // The email needs to be base64url encoded
   const emailLines = [
