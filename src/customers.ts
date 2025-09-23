@@ -8,7 +8,8 @@ import { gmail_v1, google } from "googleapis";
 const VENDUS_URL = "https://www.vendus.co.ao/ws/clients/";
 const KEY_FILE_PATH = process.env.GOOGLE_CREDENTIALS_FILE;
 const SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
-const IMPERSONATED_EMAIL = process.env.FROM_EMAIL;
+const IMPERSONATED_EMAIL = process.env.IMPERSONATED_EMAIL;
+const NO_REPLY_EMAIL = process.env.NO_REPLY_EMAIL;
 
 type OnCustomerSuccess = OnSuccessResponder<
   Prettify<{
@@ -34,10 +35,10 @@ async function authorize(): Promise<gmail_v1.Gmail> {
   });
 
   const jwtClient = new google.auth.JWT({
-    key: serviceAccountKey.client_email,
-    keyFile: serviceAccountKey.private_key,
+    email: serviceAccountKey.client_email,
+    key: serviceAccountKey.private_key,
     scopes: SCOPES,
-    email: IMPERSONATED_EMAIL,
+    subject: IMPERSONATED_EMAIL,
   });
 
   await jwtClient.authorize();
