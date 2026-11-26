@@ -5,7 +5,7 @@ import { Prettify } from "@openauthjs/openauth/util";
 import { emailTemplate } from "./emailTemplate";
 import { gmail_v1, google } from "googleapis";
 
-const VENDUS_URL = "https://www.vendus.co.ao/ws/clients/";
+const VENDUS_URL = "https://www.vendus.co.ao/ws/v1.1/clients/";
 const KEY_FILE_PATH = process.env.GOOGLE_CREDENTIALS_FILE;
 const SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
 const IMPERSONATED_EMAIL = process.env.IMPERSONATED_EMAIL;
@@ -118,30 +118,49 @@ async function fetchClient(email: string): Promise<{
   name?: string | undefined;
   fiscal_id: string;
 } | void> {
+  if (typeof email !== "string" || !email.trim()) return undefined;
+  const requestedEmail = email.trim();
   const apiKey = process.env.VENDUS_API_KEY;
-  const url = `${VENDUS_URL}?api_key=${apiKey}&q=${email}`;
+  const url = new URL(VENDUS_URL);
+  url.search = new URLSearchParams({
+    email: requestedEmail,
+    status: "active",
+    per_page: "2",
+  }).toString();
 
-  const res = await fetch(url).then((r) => r.json());
-  if (res.errors) {
-    console.error("Error fetching client:", res.errors);
+  const response = await fetch(url, {
+    headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}` },
+  });
+  if (!response.ok) {
+    console.error("Error fetching client:", response.status);
     return undefined;
   }
 
-  if (res.length > 1) {
-    console.error("Multiple clients found");
+  const clients = await response.json();
+  if (!Array.isArray(clients)) return undefined;
+  if (clients.length > 1 || Number(response.headers.get("x-paginator-items")) > 1) {
+    console.error("Multiple active clients found");
     return undefined;
   }
 
-  return res[0];
+  const client = clients[0];
+  if (
+    client?.status !== "active" ||
+    typeof client.email !== "string" ||
+    client.email.toLowerCase() !== requestedEmail.toLowerCase()
+  ) return undefined;
+
+  return client;
 }
 
 async function success(response: OnCustomerSuccess, { claims }: CustomerInput) {
   try {
     const client = await fetchClient(claims.email);
+    if (!client) throw new Error("No unique active client found");
     return response.subject("customer", {
-      email: client!.email,
-      name: client!.name,
-      fiscalID: client!.fiscal_id,
+      email: client.email,
+      name: client.name,
+      fiscalID: client.fiscal_id,
     });
   } catch (error) {
     console.error(error);
